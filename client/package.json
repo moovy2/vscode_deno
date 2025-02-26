@@ -4,22 +4,24 @@
   "author": "Deno Land Inc.",
   "license": "MIT",
   "private": true,
-  "version": "3.10.0",
+  "version": "3.43.5",
   "publisher": "deno-land",
   "repository": {
     "type": "git",
     "url": "https://github.com/denoland/vscode_deno"
   },
   "engines": {
-    "vscode": "^1.60.0"
+    "vscode": "^1.77.0"
   },
   "dependencies": {
-    "semver": "7.3.5",
-    "vscode-languageclient": "^7.0.0"
+    "dotenv": "^16.4.5",
+    "jsonc-parser": "^3.2.0",
+    "semver": "7.5.2",
+    "vscode-languageclient": "^8.0.1"
   },
   "devDependencies": {
-    "@types/semver": "7.3.8",
-    "@types/vscode": "1.60.0",
+    "@types/semver": "7.3.9",
+    "@types/vscode": "1.77.0",
     "vscode-test": "^1.6.1"
   }
 }

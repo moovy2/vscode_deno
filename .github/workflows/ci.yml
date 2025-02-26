@@ -1,4 +1,6 @@
 name: ci
+permissions:
+  contents: write
 
 on: [push, pull_request]
 
@@ -6,23 +8,24 @@ jobs:
   build:
     runs-on: ubuntu-latest
     env:
-      VSCE_COMMAND: ${{ 'vsce@1.99.0' }}
+      # WARNING: Test extension with packaged .vsix whenever upgrading vsce
+      VSCE_COMMAND: ${{ '@vscode/vsce@2.31.0' }}
     name: ci
     steps:
       - name: Checkout
-        uses: actions/checkout@v2
+        uses: actions/checkout@v4
 
       - name: Setup Node.js
         uses: actions/setup-node@v1
         with:
-          node-version: "15.14.0"
+          node-version: "20.16.0"
 
       - name: Get npm cache directory
         id: npm-cache
         run: |
-          echo "::set-output name=dir::$(npm config get cache)"
+          echo "dir=$(npm config get cache)" >> "$GITHUB_OUTPUT"
 
-      - uses: actions/cache@v2
+      - uses: actions/cache@v4
         with:
           path: ${{ steps.npm-cache.outputs.dir }}
           key: ${{ runner.os }}-node-${{ hashFiles('**/package-lock.json') }}
@@ -56,7 +59,7 @@ jobs:
         run: npx $VSCE_COMMAND package -o vscode-deno.vsix
 
       - name: Artifact upload
-        uses: actions/upload-artifact@v2
+        uses: actions/upload-artifact@v4
         with:
           name: vscode-deno
           path: vscode-deno.vsix

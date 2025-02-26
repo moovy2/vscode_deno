@@ -1,4 +1,4 @@
-// Copyright 2018-2021 the Deno authors. All rights reserved. MIT license.
+// Copyright 2018-2022 the Deno authors. All rights reserved. MIT license.
 
 import { DenoExtensionContext } from "./types";
 
@@ -12,6 +12,7 @@ export class DenoStatusBar {
       vscode.StatusBarAlignment.Right,
       0,
     );
+    this.#inner.command = "deno.client.statusBarClicked";
   }
 
   dispose() {
@@ -21,14 +22,21 @@ export class DenoStatusBar {
   refresh(extensionContext: DenoExtensionContext) {
     if (extensionContext.serverInfo) {
       this.#inner.text = `Deno ${extensionContext.serverInfo.version}`;
+      if (extensionContext.serverInfo.upgradeAvailable) {
+        this.#inner.text += " (Upgrade available)";
+      }
       this.#inner.tooltip = extensionContext.serverInfo.versionWithBuildInfo;
     }
 
     // show only when "enable" is true and language server started
     if (
-      extensionContext.workspaceSettings.enable &&
-      extensionContext.client &&
-      extensionContext.serverInfo
+      extensionContext.client && extensionContext.serverInfo &&
+      (extensionContext.scopesWithDenoJson?.size ||
+        extensionContext.enableSettingsUnscoped.enable ||
+        extensionContext.enableSettingsUnscoped.enablePaths?.length ||
+        extensionContext.enableSettingsByFolder.find(([_, s]) =>
+          s.enable || s.enablePaths?.length
+        ))
     ) {
       this.#inner.show();
     } else {

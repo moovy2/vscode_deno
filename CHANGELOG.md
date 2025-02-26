@@ -3,7 +3,318 @@
 Releases of the extension can be downloaded from
 [Visual Studio Marketplace](https://marketplace.visualstudio.com/items?itemName=denoland.vscode-deno).
 
-### [3.10.0](https://github.com/denoland/vscode_deno/compare/3.9.2...3.10.0) / 20212.01.05
+### [3.43.4](https://github.com/denoland/vscode_deno/compare/3.43.4...3.43.5) / 2025.02.26
+
+- Revert "fix: move extended language formatting to client" (#1261)
+
+### [3.43.4](https://github.com/denoland/vscode_deno/compare/3.43.3...3.43.4) / 2025.02.25
+
+- fix: move extended language formatting to client (#1258)
+
+### [3.43.3](https://github.com/denoland/vscode_deno/compare/3.43.2...3.43.3) / 2025.01.30
+
+- chore: include "rootDirs" when transferring compiler options (#1248)
+
+### [3.43.2](https://github.com/denoland/vscode_deno/compare/3.43.1...3.43.2) / 2025.01.02
+
+- chore: sync css preprocessor documents with the lsp (#1233)
+- fix: add svelte as a recognised file for deno extension (#1227)
+- fix: lockfile schema - remote is not required (#1225)
+
+### [3.43.1](https://github.com/denoland/vscode_deno/compare/3.43.0...3.43.1) / 2024.12.13
+
+- chore: sync sql and component documents with the lsp (#1223)
+
+### [3.43.0](https://github.com/denoland/vscode_deno/compare/3.42.0...3.43.0) / 2024.11.26
+
+- feat: "deno.trace.server" setting (#1189)
+- feat: enable "sloppy-imports" by tsconfig prompt (#1208)
+- feat: disable "enableProjectDiagnostics" on enable (#1191)
+- fix: support task object notation in sidebar (#1214)
+
+### [3.42.0](https://github.com/denoland/vscode_deno/compare/3.41.1...3.42.0) / 2024.10.13
+
+- feat: lockfile v4 schema (#1182)
+- feat: update icon for Deno 2 (#1175)
+- chore: update links (#1174)
+
+### [3.41.1](https://github.com/denoland/vscode_deno/compare/3.41.0...3.41.1) / 2024.10.07
+
+- chore: log to the output window if disabled completely (#1172)
+
+### [3.41.0](https://github.com/denoland/vscode_deno/compare/3.40.0...3.41.0) / 2024.09.23
+
+- feat: helper prompts for tsconfig.json compiler options (#1166)
+- feat: use --inspect-wait for prerelease deno (#1150)
+
+### [3.40.0](https://github.com/denoland/vscode_deno/compare/3.39.0...3.40.0) / 2024.09.10
+
+- feat: unstable setting as list (#1159)
+
+### [3.39.0](https://github.com/denoland/vscode_deno/compare/3.38.2...3.39.0) / 2024.09.02
+
+- chore: sync html/css/yaml documents with the lsp (#1154)
+
+### [3.38.2](https://github.com/denoland/vscode_deno/compare/3.38.1...3.38.2) / 2024.08.13
+
+- fix: downgrade vsce to 2.31.0 to fix broken imports (#1147)
+
+### [3.38.1](https://github.com/denoland/vscode_deno/compare/3.38.0...3.38.1) / 2024.08.13
+
+- fix: use includePrerelease when checking minimum server version (#1142)
+
+### [3.38.0](https://github.com/denoland/vscode_deno/compare/3.37.1...3.38.0) / 2024.07.03
+
+- feat: "deno.env" and "deno.envFile" settings (#1128)
+
+### [3.37.1](https://github.com/denoland/vscode_deno/compare/3.37.0...3.37.1) / 2024.05.09
+
+- fix: handle nested config files in tasks sidebar (#1111)
+- fix: don't spawn the language server if explicitly disabled settings (#1109)
+
+### [3.37.0](https://github.com/denoland/vscode_deno/compare/3.36.0...3.37.0) / 2024.04.12
+
+- fix: normalize notebook cell filename in plugin (#1103)
+- feat: add "deno.future" setting (#1101)
+
+### [3.36.0](https://github.com/denoland/vscode_deno/compare/3.35.1...3.36.0) / 2024.03.27
+
+- chore: enable "deno.cacheOnSave" by default (#1092)
+
+### [3.35.1](https://github.com/denoland/vscode_deno/compare/3.35.0...3.35.1) / 2024.03.10
+
+- ci: add write permission (#1090)
+
+### [3.35.0](https://github.com/denoland/vscode_deno/compare/3.34.0...3.35.0) / 2024.03.09
+
+- fix: explicitly allow null in deno.enable (#1083)
+- fix: sort enable settings by folder (#1086)
+- feat: run task via context menu (#1087)
+
+### [3.34.0](https://github.com/denoland/vscode_deno/compare/3.33.3...3.34.0) / 2024.02.25
+
+- chore: rename "deno/task" request to "deno.taskDefinitions" (#1057)
+- fix: register commands before starting language server (#1056)
+- feat: restore init workspace command as alias (#1059)
+- feat: show a modal dialog after workspace init (#1060)
+
+### [3.33.3](https://github.com/denoland/vscode_deno/compare/3.33.2...3.33.3) / 2024.01.26
+
+- fix: check configuration type for deno.json detection (#1053)
+- fix: remove undefined ref in lockfile schema (#1052)
+
+### [3.33.2](https://github.com/denoland/vscode_deno/compare/3.33.1...3.33.2) / 2024.01.25
+
+- fix: treat enable settings as optional in plugin (#1046)
+
+### [3.33.1](https://github.com/denoland/vscode_deno/compare/3.33.0...3.33.1) / 2024.01.25
+
+- fix: refresh enable settings before initializing plugin (#1044)
+
+### [3.33.0](https://github.com/denoland/vscode_deno/compare/3.32.0...3.33.0) / 2024.01.24
+
+- feat: add workspace and jsr fields to lockfile schema (#1038)
+
+### [3.32.0](https://github.com/denoland/vscode_deno/compare/3.31.0...3.32.0) / 2024.01.24
+
+- chore: default "deno.enablePaths" to null (#1028)
+- feat: remove init workspace command (#1027)
+- feat: accept notifications for subdirectory deno.json files (#1034)
+
+### [3.31.0](https://github.com/denoland/vscode_deno/compare/3.30.0...3.31.0) / 2023.12.28
+
+- chore: upgrade typescript to 5.0.2 (#1020)
+- chore: only construct log string when logging enabled (#1019)
+- feat: "deno.internalInspect" setting (#1007)
+
+### [3.30.0](https://github.com/denoland/vscode_deno/compare/3.29.0...3.30.0) / 2023.12.18
+
+- feat: version info command (#1008)
+- feat: "deno.client.enable" and "deno.client.disable" commands (#1010)
+- fix: use "denoTasks" type for task-sidebar commands (#1013)
+
+### [3.29.0](https://github.com/denoland/vscode_deno/compare/3.28.0...3.29.0) / 2023.12.8
+
+- feat: "deno.logFile" setting (#1003)
+- fix: tasks panel empty on win machines (#996)
+
+### [3.28.0](https://github.com/denoland/vscode_deno/compare/3.27.0...3.28.0) / 2023.11.16
+
+- feat: deno upgrade prompt (#988)
+- chore: remove compat paths for lsp < 1.37.0 (#992)
+
+### [3.27.0](https://github.com/denoland/vscode_deno/compare/3.26.0...3.27.0) / 2023.11.01
+
+- fix: update tasks sidebar on config change notification (#964)
+- fix: don't error on missing typescript-language-features (#976)
+- fix: send "untitled:///" specifiers to the LSP (#978)
+- fix: show error message for workspace init failure (#980)
+- chore: deprecate "deno.*" mirror settings (#981)
+
+### [3.26.0](https://github.com/denoland/vscode_deno/compare/3.25.1...3.26.0) / 2023.10.10
+
+- fix: update lockfile schema to v3 (#965)
+- feat: add deno tasks sidebar (#958)
+
+### [3.25.1](https://github.com/denoland/vscode_deno/compare/3.25.0...3.25.1) / 2023.10.04
+
+- fix: increase client shutdown timeout from 2s to 10s (#954)
+
+### [3.25.0](https://github.com/denoland/vscode_deno/compare/3.24.0...3.25.0) / 2023.09.27
+
+- docs: fix hyperlink to the Deno Language Server manual (#945)
+- fix: append index to status requests (#946)
+- feat: register notebook cells with the language client (#949)
+
+### [3.24.0](https://github.com/denoland/vscode_deno/compare/3.23.1...3.24.0) / 2023.09.25
+
+- fix: regression when caching via the command palette (#930)
+- feat: include "javascript" and "typescript" settings in LSP init options (#929)
+
+### [3.23.1](https://github.com/denoland/vscode_deno/compare/3.23.0...3.23.1) / 2023.09.19
+
+- fix: provide args to deno.cache on cache-on-save (#924)
+
+### [3.23.0](https://github.com/denoland/vscode_deno/compare/3.22.0...3.23.0) / 2023.09.19
+
+- fix: getCompilerOptionsDiagnostics and getNavigateToItems fixed when "deno.enable" is false (#915)
+- feat: Restore "deno.enable" null default for deno.json auto-detection (#921)
+- feat: feat: "deno.disablePaths" setting (#919)
+
+### [3.22.0](https://github.com/denoland/vscode_deno/compare/3.21.0...3.22.0) / 2023.09.08
+
+- fix: properly detect 1.37.0 (#911)
+- fix: default "deno.enable" to false temporarily (#913)
+- feat: remove dead "deno.testing.enable" setting (#912)
+
+### [3.21.0](https://github.com/denoland/vscode_deno/compare/3.20.0...3.21.0) / 2023.09.05
+
+- fix: run only the clicked test via code lens (#798)
+- fix: delete renamed test steps (#898)
+- fix: check for existing commands before registering them (#905)
+- feat: add redirects to lockfile schema (#894)
+- feat: allow --inspect-wait when debugging test (#893)
+
+- feat: enable via config file detection (#902)
+
+  This will only activate with Deno 1.37.0 installed, which is unreleased as of
+  writing. Removes the prompt added in
+  [3.12.0](https://github.com/denoland/vscode_deno/blob/main/CHANGELOG.md#3120--20220330)
+  since it's superseded by this feature.
+
+### [3.20.0](https://github.com/denoland/vscode_deno/compare/3.19.1...3.20.0) / 2023.08.03
+
+- fix: respect user's answers for enabling or disabling lint and the unstable
+  flag during workspace initialization (#799)
+- feat: cache on save (#831, #877)
+- feat: Refreshed icon (#869)
+- feat: show output panel on status bar click (#861)
+
+### [3.19.1](https://github.com/denoland/vscode_deno/compare/3.19.0...3.19.1) / 2023.05.24
+
+- fix: update default import suggestions (#854)
+
+### [3.19.0](https://github.com/denoland/vscode_deno/compare/3.18.0...3.19.0) / 2023.05.23
+
+- feat: ability to increase typescript isolate's max memory (#848)
+
+### [3.18.0](https://github.com/denoland/vscode_deno/compare/3.17.0...3.18.0) / 2023.05.12
+
+- feat: configurable document preload limit (#846)
+
+### [3.17.0](https://github.com/denoland/vscode_deno/compare/3.16.0...3.17.0) / 2023.01.28
+
+Revert "feat: enable inlay hints by default" (#794)
+
+### [3.16.0](https://github.com/denoland/vscode_deno/compare/3.15.0...3.16.0) / 2023.01.04
+
+- feat: Add lockfile schema (#766)
+- feat: Make `--inspect-brk` default in older versions of Deno (#779)
+- feat: Make `--inspect-wait` default when creating debug config (#775)
+- feat: Use "node" launch type instead of "pwa-node" (#758)
+
+### [3.15.0](https://github.com/denoland/vscode_deno/compare/3.14.1...3.15.0) / 2022.12.14
+
+feat: enable inlay hints by default (#759)
+
+### [3.14.1](https://github.com/denoland/vscode_deno/compare/3.14.0...3.14.1) / 2022.11.11
+
+- fix: `enablePaths` on Windows (#745)
+
+### [3.14.0](https://github.com/denoland/vscode_deno/compare/3.13.2...3.14.0) / 2022.10.26
+
+- feat: add inlay hint settings (#733)
+
+  With versions of Deno that support it (Release 1.27 and later), the extension
+  now support configuring inlay hints for Deno enabled projects. The settings
+  are controlled via `deno.inlayHints` and are off by default.
+
+- fix: send inlay hints config on init (#740)
+
+### [3.13.2](https://github.com/denoland/vscode_deno/compare/3.13.1...3.13.2) / 2022.10.09
+
+- fix: deno/tasks expects no parameters (#722)
+- fix: exclude demo image from extension package (#711)
+
+### [3.13.1](https://github.com/denoland/vscode_deno/compare/3.13.0...3.13.1) / 2022.07.22
+
+- fix: catch errors while fetching config tasks from language server (#669)
+
+### [3.13.0](https://github.com/denoland/vscode_deno/compare/3.12.0...3.13.0) / 2022.06.27
+
+- feat: don't write configuration to settings.json if values are default (#666)
+- feat: enable lint by default (#665)
+
+- fix: do not start lsp or show any messages if `deno` not found and not in a
+  Deno project (#683)
+- fix: resolve `deno` command from the default install location if it's not on
+  the PATH (#684)
+
+### [3.12.0](https://github.com/denoland/vscode_deno/compare/3.11.0...3.12.0) / 2022.03.30
+
+- feat: prompt for enabling when config detected (#640)
+
+  When a `deno.json` or `deno.jsonc` is detected in the root of a workspace or
+  workspace folder and Deno isn't explicitly enabled or disabled, a prompt will
+  appear to choose to enable the workspace (or workspace folder).
+
+- feat: support config file tasks (#641)
+
+  When a Deno configuration file (`deno.json`/`deno.jsonc`) applies to a
+  workspace, and the Deno language server supports the task detection feature,
+  tasks from the configuration file will be available in VSCode.
+
+- feat: support vscode Testing API (#629)
+
+  When the Deno language server supports the experimental testing API, tests
+  will be made available in the Testing Explorer pane and other decorations
+  individual tests in the code.
+
+### [3.11.0](https://github.com/denoland/vscode_deno/compare/3.10.1...3.11.0) / 2022.03.21
+
+- feat: support certificate related options (#612)
+
+  Options are now supported to provide the Deno language server with custom TLS
+  certificate information as well as unsafely ignore invalid TLS certificates,
+  which are currently supported on the command line. This allows the extension
+  to cache modules in custom certificate TLS environments from the editor.
+
+- feat: support Deno enabling specified workspace paths (#635)
+
+  When used with a version of the Deno language server that supports the same
+  feature, specified folders (and their sub folders) can be _Deno enabled_
+  leaving the remaining folders in the workspace using the built-in
+  JavaScript/TypeScript language server. This feature is set using the _Deno:
+  Enable Paths_ setting or `"deno.enablePaths"` if editing settings directly.
+
+- fix: utilize fresh objects when muting built in ls (#615)
+- fix: send all workspace settings during initialization (#632)
+
+### [3.10.1](https://github.com/denoland/vscode_deno/compare/3.10.0...3.10.1) / 2022.01.16
+
+- fix: update nest.land registry (#602)
+
+### [3.10.0](https://github.com/denoland/vscode_deno/compare/3.9.2...3.10.0) / 2022.01.05
 
 - feat: enable known registries by default (#594)
 

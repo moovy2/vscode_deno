@@ -1,21 +1,36 @@
-// Copyright 2018-2021 the Deno authors. All rights reserved. MIT license.
+// Copyright 2018-2022 the Deno authors. All rights reserved. MIT license.
 
-import type { Settings } from "./types";
-import { getDenoCommand } from "./util";
 import * as vscode from "vscode";
+import type { DenoExtensionContext } from "./types";
+import { getDenoCommandName, getInspectArg } from "./util";
+import { EXTENSION_NS } from "./constants";
 
 export class DenoDebugConfigurationProvider
   implements vscode.DebugConfigurationProvider {
-  #getSettings: () => Settings;
+  #extensionContext: DenoExtensionContext;
 
   #getEnv() {
-    const cache = this.#getSettings().cache;
-    return cache ? { "DENO_DIR": cache } : undefined;
+    const settings = this.#extensionContext.clientOptions
+      .initializationOptions();
+    const config = vscode.workspace.getConfiguration(EXTENSION_NS);
+    const env: Record<string, string> = {};
+    const denoEnv = config.get<Record<string, string>>("env");
+    if (denoEnv) {
+      Object.assign(env, denoEnv);
+    }
+    if (settings.cache) {
+      env["DENO_DIR"] = settings.cache;
+    }
+    if (settings.future) {
+      env["DENO_FUTURE"] = "1";
+    }
+    return env;
   }
 
   #getAdditionalRuntimeArgs() {
     const args: string[] = [];
-    const settings = this.#getSettings();
+    const settings = this.#extensionContext.clientOptions
+      .initializationOptions();
     if (settings.unstable) {
       args.push("--unstable");
     }
@@ -30,29 +45,37 @@ export class DenoDebugConfigurationProvider
     return args;
   }
 
-  constructor(getSettings: () => Settings) {
-    this.#getSettings = getSettings;
+  #getInspectArg() {
+    return getInspectArg(this.#extensionContext.serverInfo?.version);
+  }
+
+  constructor(extensionContext: DenoExtensionContext) {
+    this.#extensionContext = extensionContext;
   }
 
   async provideDebugConfigurations(): Promise<vscode.DebugConfiguration[]> {
-    return [
-      {
-        request: "launch",
-        name: "Launch Program",
-        type: "pwa-node",
-        program: "${workspaceFolder}/main.ts",
-        cwd: "${workspaceFolder}",
-        env: this.#getEnv(),
-        runtimeExecutable: await getDenoCommand(),
-        runtimeArgs: [
-          "run",
-          ...this.#getAdditionalRuntimeArgs(),
-          "--inspect",
-          "--allow-all",
-        ],
-        attachSimplePort: 9229,
-      },
-    ];
+    const config = vscode.workspace.getConfiguration(EXTENSION_NS);
+    const debugConfig: vscode.DebugConfiguration = {
+      request: "launch",
+      name: "Launch Program",
+      type: "node",
+      program: "${workspaceFolder}/main.ts",
+      cwd: "${workspaceFolder}",
+      env: this.#getEnv(),
+      runtimeExecutable: await getDenoCommandName(),
+      runtimeArgs: [
+        "run",
+        ...this.#getAdditionalRuntimeArgs(),
+        this.#getInspectArg(),
+        "--allow-all",
+      ],
+      attachSimplePort: 9229,
+    };
+    const denoEnvFile = config.get<string>("envFile");
+    if (denoEnvFile) {
+      debugConfig.envFile = denoEnvFile;
+    }
+    return [debugConfig];
   }
 
   async resolveDebugConfiguration(
@@ -68,23 +91,29 @@ export class DenoDebugConfigurationProvider
         (langId === "typescript" || langId === "javascript" ||
           langId === "typescriptreact" || langId === "javascriptreact")
       ) {
-        // https://github.com/microsoft/vscode/issues/106703#issuecomment-694595773
         // Bypass the bug of the vscode 1.49.0
-        vscode.debug.startDebugging(workspace, {
+        const config = vscode.workspace.getConfiguration(EXTENSION_NS);
+        const debugConfig: vscode.DebugConfiguration = {
           request: "launch",
           name: "Launch Program",
-          type: "pwa-node",
+          type: "node",
           program: "${file}",
           env: this.#getEnv(),
-          runtimeExecutable: await getDenoCommand(),
+          runtimeExecutable: await getDenoCommandName(),
           runtimeArgs: [
             "run",
             ...this.#getAdditionalRuntimeArgs(),
-            "--inspect",
+            this.#getInspectArg(),
             "--allow-all",
           ],
           attachSimplePort: 9229,
-        });
+        };
+        const denoEnvFile = config.get<string>("envFile");
+        if (denoEnvFile) {
+          debugConfig.envFile = denoEnvFile;
+        }
+        // https://github.com/microsoft/vscode/issues/106703#issuecomment-694595773
+        vscode.debug.startDebugging(workspace, debugConfig);
         return undefined;
       }
       return null;

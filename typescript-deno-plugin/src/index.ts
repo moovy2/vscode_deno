@@ -1,14 +1,19 @@
-// Copyright 2018-2021 the Deno authors. All rights reserved. MIT license.
+// Copyright 2018-2022 the Deno authors. All rights reserved. MIT license.
 
-import type { PluginSettings, Settings } from "../../client/src/shared_types";
+import type { PluginSettings } from "../../client/src/shared_types";
 import type * as ts from "../node_modules/typescript/lib/tsserverlibrary";
+import * as path from "path";
+import * as process from "process";
+import * as os from "os";
+import { setImmediate } from "timers";
+import * as util from "util";
 
 /** Extract the return type from a maybe function. */
 // deno-lint-ignore no-explicit-any
 type ReturnType<T = (...args: any) => any> = T extends // deno-lint-ignore no-explicit-any
 (...args: any) => infer R ? R
-  : // deno-lint-ignore no-explicit-any
-  any;
+  // deno-lint-ignore no-explicit-any
+  : any;
 /** Extract the parameter types from a maybe function. */
 // deno-lint-ignore no-explicit-any
 type Parameters<T = (...args: any) => any> = T extends // deno-lint-ignore no-explicit-any
@@ -18,77 +23,84 @@ type Parameters<T = (...args: any) => any> = T extends // deno-lint-ignore no-ex
 type CallIfDisabledFunction = <T extends ts.LanguageService, J extends keyof T>(
   fn: J,
   fileNameArg: number | undefined,
-  enabledReturn: ReturnType<T[J]>,
+  enabledReturn: (() => ReturnType<T[J]>) | ReturnType<T[J]>,
 ) => (...args: Parameters<T[J]>) => ReturnType<T[J]>;
 
 /** Contains the project settings that have been provided by the extension for
  * each workspace. */
 const projectSettings = new Map<string, PluginSettings>();
 
-/** The default settings to assume to be true until a configuration message is
- * received from the extension. */
-const defaultSettings: Settings = {
-  cache: null,
-  enable: false,
-  codeLens: null,
-  config: null,
-  importMap: null,
-  internalDebug: false,
-  lint: false,
-  path: null,
-  suggest: {
-    autoImports: true,
-    completeFunctionCalls: false,
-    names: true,
-    paths: true,
-    imports: {
-      autoDiscover: true,
-      hosts: {},
-    },
-  },
-  unstable: false,
-};
-
-function updateSettings(
-  project: ts.server.Project,
-  settings: PluginSettings,
-): void {
-  projectSettings.set(project.getProjectName(), settings);
-  // We will update the default settings, which helps ensure that when a plugin
-  // is created or re-created, we can assume what the previous settings where
-  // until told otherwise.
-  Object.assign(defaultSettings, settings.workspace);
-}
-
 class Plugin implements ts.server.PluginModule {
   #project!: ts.server.Project;
   #projectName!: string;
 
-  #getGlobalSettings(): Settings {
-    return projectSettings.get(this.#projectName)?.workspace ??
-      defaultSettings;
+  // determines if a deno is enabled "globally" or not for those APIs which
+  // don't reference a file name
+  #denoEnabled(): boolean {
+    const pluginSettings = projectSettings.get(this.#projectName);
+    if (!pluginSettings) {
+      return false;
+    }
+    const enableSettingsUnscoped = pluginSettings.enableSettingsUnscoped ??
+      { enable: null, enablePaths: null, disablePaths: [] };
+    const scopesWithDenoJson = pluginSettings.scopesWithDenoJson ?? [];
+    if (enableSettingsUnscoped.enable != null) {
+      return enableSettingsUnscoped.enable;
+    }
+    return scopesWithDenoJson.length != 0;
   }
 
-  #getSetting<K extends keyof Settings>(
-    fileName: string,
-    key: K,
-  ): Settings[K] {
-    const settings = projectSettings.get(this.#projectName);
-    return settings?.documents?.[fileName]?.settings[key] ??
-      // deno-lint-ignore no-explicit-any
-      settings?.workspace?.[key] as any ?? defaultSettings[key];
+  // determines if a specific filename is Deno enabled or not.
+  #fileNameDenoEnabled(fileName: string): boolean {
+    if (process.platform === "win32") {
+      fileName = fileName.replace(/\//g, "\\");
+    }
+    fileName = fileName.replace(/^\^\/vscode-notebook-cell\/[^/]*/, "");
+    const pluginSettings = projectSettings.get(this.#projectName);
+    if (!pluginSettings) {
+      return false;
+    }
+    const enableSettings =
+      pluginSettings.enableSettingsByFolder?.find(([workspace, _]) =>
+        pathStartsWith(fileName, workspace)
+      )?.[1] ?? pluginSettings.enableSettingsUnscoped ??
+        { enable: null, enablePaths: null, disablePaths: [] };
+    const scopesWithDenoJson = pluginSettings.scopesWithDenoJson ?? [];
+    for (const path of enableSettings.disablePaths) {
+      if (pathStartsWith(fileName, path)) {
+        return false;
+      }
+    }
+    if (enableSettings.enablePaths) {
+      return enableSettings.enablePaths.some((path) =>
+        pathStartsWith(fileName, path)
+      );
+    }
+    if (enableSettings.enable != null) {
+      return enableSettings.enable;
+    }
+    return scopesWithDenoJson.some((scope) => pathStartsWith(fileName, scope));
   }
 
-  #log = (_msg: string) => {};
+  #log = (..._msgs: unknown[]) => {};
+  #loggingEnabled = () => true;
 
   create(info: ts.server.PluginCreateInfo): ts.LanguageService {
     const { languageService: ls, project, config } = info;
-    this.#log = (msg) =>
-      project.projectService.logger.info(`[typescript-deno-plugin] ${msg}`);
+    this.#log = (...msgs) => {
+      project.projectService.logger.info(
+        `[typescript-deno-plugin] ${
+          msgs.map((m) => typeof m === "string" ? m : util.inspect(m)).join(" ")
+        }`,
+      );
+    };
+    this.#loggingEnabled = () => {
+      return project.projectService.logger.loggingEnabled();
+    };
 
     this.#project = project;
     this.#projectName = project.getProjectName();
-    updateSettings(this.#project, config);
+    projectSettings.set(this.#project.getProjectName(), config);
     setImmediate(() => {
       this.#project.refreshDiagnostics();
     });
@@ -102,24 +114,33 @@ class Plugin implements ts.server.PluginModule {
       // deno-lint-ignore no-explicit-any
       const target = (ls as any)[fn];
       return (...args) => {
+        if (this.#loggingEnabled()) {
+          this.#log(fn, args);
+        }
         const enabled = fileNameArg !== undefined
-          ? this.#getSetting(args[fileNameArg] as string, "enable")
-          : this.#getGlobalSettings().enable;
-        return enabled ? emptyReturn : target.call(ls, ...args);
+          ? this.#fileNameDenoEnabled(args[fileNameArg] as string)
+          : this.#denoEnabled();
+        return enabled
+          // in order to keep the `emptyReturn` separate instances, we do some
+          // analysis here to ensure we are returning a "fresh" `emptyReturn`
+          ? Array.isArray(emptyReturn)
+            ? []
+            : typeof emptyReturn === "function"
+            ? (emptyReturn as () => unknown)()
+            : emptyReturn
+          : target.call(ls, ...args);
       };
     };
 
     // This "mutes" diagnostics for things like tsconfig files.
     const projectGetGlobalProjectErrors = this.#project.getGlobalProjectErrors;
     this.#project.getGlobalProjectErrors = () =>
-      this.#getGlobalSettings().enable
+      this.#denoEnabled()
         ? []
         : projectGetGlobalProjectErrors.call(this.#project);
     const projectGetAllProjectErrors = this.#project.getAllProjectErrors;
     this.#project.getAllProjectErrors = () =>
-      this.#getGlobalSettings().enable
-        ? []
-        : projectGetAllProjectErrors.call(this.#project);
+      this.#denoEnabled() ? [] : projectGetAllProjectErrors.call(this.#project);
 
     const commentSelection = callIfDisabled("commentSelection", 0, []);
     const findReferences = callIfDisabled("findReferences", 0, undefined);
@@ -127,7 +148,7 @@ class Plugin implements ts.server.PluginModule {
       "findRenameLocations",
       0,
       undefined,
-    );
+    ) as ts.LanguageService["findRenameLocations"];
     const getApplicableRefactors = callIfDisabled(
       "getApplicableRefactors",
       0,
@@ -201,12 +222,12 @@ class Plugin implements ts.server.PluginModule {
     const getEncodedSemanticClassifications = callIfDisabled(
       "getEncodedSemanticClassifications",
       0,
-      { spans: [], endOfLineState: 0 },
+      () => ({ spans: [], endOfLineState: 0 }),
     );
     const getEncodedSyntacticClassifications = callIfDisabled(
       "getEncodedSyntacticClassifications",
       0,
-      { spans: [], endOfLineState: 0 },
+      () => ({ spans: [], endOfLineState: 0 }),
     );
     const getImplementationAtPosition = callIfDisabled(
       "getImplementationAtPosition",
@@ -233,13 +254,13 @@ class Plugin implements ts.server.PluginModule {
       0,
       [],
     );
-    const getNavigationTree = callIfDisabled("getNavigationTree", 0, {
+    const getNavigationTree = callIfDisabled("getNavigationTree", 0, () => ({
       text: "",
       kind: "" as ts.ScriptElementKind.unknown,
       kindModifiers: "",
       spans: [],
       nameSpan: undefined,
-    });
+    }));
     const getOutliningSpans = callIfDisabled("getOutliningSpans", 0, []);
     const getQuickInfoAtPosition = callIfDisabled(
       "getQuickInfoAtPosition",
@@ -292,7 +313,6 @@ class Plugin implements ts.server.PluginModule {
       0,
       undefined,
     );
-    const organizeImports = callIfDisabled("organizeImports", undefined, []);
     const prepareCallHierarchy = callIfDisabled(
       "prepareCallHierarchy",
       0,
@@ -316,6 +336,11 @@ class Plugin implements ts.server.PluginModule {
       [],
     );
     const uncommentSelection = callIfDisabled("uncommentSelection", 0, []);
+    const getSupportedCodeFixes = callIfDisabled(
+      "getSupportedCodeFixes",
+      0,
+      [],
+    );
 
     return {
       ...ls,
@@ -356,7 +381,6 @@ class Plugin implements ts.server.PluginModule {
       getSyntacticDiagnostics,
       getTodoComments,
       getTypeDefinitionAtPosition,
-      organizeImports,
       prepareCallHierarchy,
       provideCallHierarchyIncomingCalls,
       provideCallHierarchyOutgoingCalls,
@@ -364,12 +388,15 @@ class Plugin implements ts.server.PluginModule {
       toggleLineComment,
       toggleMultilineComment,
       uncommentSelection,
+      getSupportedCodeFixes,
     };
   }
 
   onConfigurationChanged(settings: PluginSettings): void {
-    this.#log(`onConfigurationChanged(${JSON.stringify(settings)})`);
-    updateSettings(this.#project, settings);
+    if (this.#loggingEnabled()) {
+      this.#log(`onConfigurationChanged(${JSON.stringify(settings)})`);
+    }
+    projectSettings.set(this.#project.getProjectName(), settings);
     this.#project.refreshDiagnostics();
   }
 }
@@ -377,6 +404,19 @@ class Plugin implements ts.server.PluginModule {
 function init(): ts.server.PluginModule {
   console.log(`INIT typescript-deno-plugin`);
   return new Plugin();
+}
+
+const PARENT_RELATIVE_REGEX = os.platform() === "win32"
+  ? /\.\.(?:[/\\]|$)/
+  : /\.\.(?:\/|$)/;
+
+/** Checks if `parent` is an ancestor of `child`. */
+function pathStartsWith(child: string, parent: string) {
+  if (path.isAbsolute(child) !== path.isAbsolute(parent)) {
+    return false;
+  }
+  const relative = path.relative(parent, child);
+  return !relative.match(PARENT_RELATIVE_REGEX);
 }
 
 export = init;

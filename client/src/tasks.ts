@@ -1,11 +1,18 @@
-// Copyright 2018-2021 the Deno authors. All rights reserved. MIT license.
+// Copyright 2018-2022 the Deno authors. All rights reserved. MIT license.
 
-import { getDenoCommand } from "./util";
+import * as path from "path";
+import type { DenoExtensionContext } from "./types";
+import { getDenoCommandName, isWorkspaceFolder } from "./util";
 
 import * as vscode from "vscode";
 
 export const TASK_TYPE = "deno";
 export const TASK_SOURCE = "deno";
+
+interface DenoConfigTaskDefinition extends vscode.TaskDefinition {
+  name: string;
+  detail?: string;
+}
 
 export interface DenoTaskDefinition extends vscode.TaskDefinition {
   command: string;
@@ -14,15 +21,16 @@ export interface DenoTaskDefinition extends vscode.TaskDefinition {
   env?: Record<string, string>;
 }
 
-export async function buildDenoTask(
+export function buildDenoTask(
   target: vscode.WorkspaceFolder,
+  process: string,
   definition: DenoTaskDefinition,
   name: string,
   args: string[],
   problemMatchers: string[],
-): Promise<vscode.Task> {
+): vscode.Task {
   const exec = new vscode.ProcessExecution(
-    await getDenoCommand(),
+    process,
     args,
     definition,
   );
@@ -37,12 +45,59 @@ export async function buildDenoTask(
   );
 }
 
-function isWorkspaceFolder(value: unknown): value is vscode.WorkspaceFolder {
-  return typeof value === "object" && value != null &&
-    (value as vscode.WorkspaceFolder).name !== undefined;
+export function buildDenoConfigTask(
+  scope: vscode.WorkspaceFolder,
+  process: string,
+  name: string,
+  command: string | undefined,
+  sourceUri?: vscode.Uri,
+): vscode.Task {
+  const args = [];
+  if (
+    sourceUri &&
+    vscode.Uri.joinPath(sourceUri, "..").toString() != scope.uri.toString()
+  ) {
+    const configPath = path.relative(scope.uri.fsPath, sourceUri.fsPath);
+    args.push("-c", configPath);
+  }
+  args.push(name);
+  const task = new vscode.Task(
+    {
+      type: TASK_TYPE,
+      name: name,
+      command: "task",
+      args,
+      sourceUri,
+    },
+    scope,
+    name,
+    TASK_SOURCE,
+    new vscode.ProcessExecution(process, ["task", ...args]),
+    ["$deno"],
+  );
+  task.detail = `$ ${command}`;
+  return task;
+}
+
+function isDenoTaskDefinition(
+  value: vscode.TaskDefinition,
+): value is DenoTaskDefinition {
+  return value.type === TASK_TYPE && typeof value.command !== "undefined";
+}
+
+function isDenoConfigTaskDefinition(
+  value: vscode.TaskDefinition,
+): value is DenoConfigTaskDefinition {
+  return value.type === TASK_TYPE && typeof value.name !== "undefined";
 }
 
 class DenoTaskProvider implements vscode.TaskProvider {
+  #extensionContext: DenoExtensionContext;
+
+  constructor(extensionContext: DenoExtensionContext) {
+    this.#extensionContext = extensionContext;
+  }
+
   async provideTasks(): Promise<vscode.Task[]> {
     const defs = [
       {
@@ -71,13 +126,17 @@ class DenoTaskProvider implements vscode.TaskProvider {
         group: vscode.TaskGroup.Test,
         problemMatchers: ["$deno-test"],
       },
+      { command: "upgrade", group: undefined, problemMatchers: ["$deno"] },
     ];
 
     const tasks: vscode.Task[] = [];
+
+    const process = await getDenoCommandName();
     for (const workspaceFolder of vscode.workspace.workspaceFolders ?? []) {
       for (const { command, group, problemMatchers } of defs) {
-        const task = await buildDenoTask(
+        const task = buildDenoTask(
           workspaceFolder,
+          process,
           { type: TASK_TYPE, command },
           command,
           [command],
@@ -87,28 +146,41 @@ class DenoTaskProvider implements vscode.TaskProvider {
         tasks.push(task);
       }
     }
+
     return tasks;
   }
 
   async resolveTask(task: vscode.Task): Promise<vscode.Task | undefined> {
-    const definition = task.definition as DenoTaskDefinition;
+    const { definition } = task;
 
-    if (definition.type === TASK_TYPE && definition.command) {
+    if (isDenoTaskDefinition(definition)) {
       const args = [definition.command].concat(definition.args ?? []);
       if (isWorkspaceFolder(task.scope)) {
-        return await buildDenoTask(
+        return buildDenoTask(
           task.scope,
+          await getDenoCommandName(),
           definition,
           task.name,
           args,
           task.problemMatchers,
         );
       }
+    } else if (isDenoConfigTaskDefinition(definition)) {
+      if (isWorkspaceFolder(task.scope)) {
+        return buildDenoConfigTask(
+          task.scope,
+          await getDenoCommandName(),
+          definition.name,
+          definition.detail,
+        );
+      }
     }
   }
 }
 
-export function activateTaskProvider(): vscode.Disposable {
-  const provider = new DenoTaskProvider();
+export function activateTaskProvider(
+  extensionContext: DenoExtensionContext,
+): vscode.Disposable {
+  const provider = new DenoTaskProvider(extensionContext);
   return vscode.tasks.registerTaskProvider(TASK_TYPE, provider);
 }

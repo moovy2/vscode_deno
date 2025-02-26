@@ -1,83 +1,29 @@
-// Copyright 2018-2021 the Deno authors. All rights reserved. MIT license.
+// Copyright 2018-2022 the Deno authors. All rights reserved. MIT license.
 
 import * as commands from "./commands";
-import { ENABLEMENT_FLAG, EXTENSION_NS } from "./constants";
+import {
+  ENABLEMENT_FLAG,
+  EXTENSION_NS,
+  LANGUAGE_CLIENT_NAME,
+} from "./constants";
 import { DenoTextDocumentContentProvider, SCHEME } from "./content_provider";
 import { DenoDebugConfigurationProvider } from "./debug_config_provider";
+import { refreshEnableSettings } from "./enable";
 import { DenoStatusBar } from "./status_bar";
 import { activateTaskProvider } from "./tasks";
 import { getTsApi } from "./ts_api";
-import type { DenoExtensionContext, Settings } from "./types";
-import { assert } from "./util";
+import type { DenoExtensionContext } from "./types";
+import * as util from "util";
 
-import * as path from "path";
 import * as vscode from "vscode";
-
-/** The language IDs we care about. */
-const LANGUAGES = [
-  "typescript",
-  "javascript",
-  "typescriptreact",
-  "javascriptreact",
-];
-
-/** These are keys of settings that have a scope of window or machine. */
-const workspaceSettingsKeys: Array<keyof Settings> = [
-  "cache",
-  "codeLens",
-  "config",
-  "importMap",
-  "internalDebug",
-  "lint",
-  "suggest",
-  "unstable",
-];
-
-/** These are keys of settings that can apply to an individual resource, like
- * a file or folder. */
-const resourceSettingsKeys: Array<keyof Settings> = [
-  "enable",
-  "codeLens",
-];
-
-/** Convert a workspace configuration to `Settings` for a workspace. */
-function configToWorkspaceSettings(
-  config: vscode.WorkspaceConfiguration,
-): Settings {
-  const workspaceSettings = Object.create(null);
-  for (const key of workspaceSettingsKeys) {
-    workspaceSettings[key] = config.get(key);
-  }
-  for (const key of resourceSettingsKeys) {
-    workspaceSettings[key] = config.get(key);
-  }
-  return workspaceSettings;
-}
-
-/** Convert a workspace configuration to settings that apply to a resource. */
-function configToResourceSettings(
-  config: vscode.WorkspaceConfiguration,
-): Partial<Settings> {
-  const resourceSettings = Object.create(null);
-  for (const key of resourceSettingsKeys) {
-    const value = config.inspect(key);
-    assert(value);
-    resourceSettings[key] = value.workspaceFolderLanguageValue ??
-      value.workspaceFolderValue ?? value.workspaceLanguageValue ??
-      value.workspaceValue ??
-      value.globalValue ??
-      value.defaultValue;
-  }
-  return resourceSettings;
-}
-
-function getWorkspaceSettings(): Settings {
-  const config = vscode.workspace.getConfiguration(EXTENSION_NS);
-  return configToWorkspaceSettings(config);
-}
+import { registerSidebar } from "./tasks_sidebar";
 
 function handleConfigurationChange(event: vscode.ConfigurationChangeEvent) {
-  if (event.affectsConfiguration(EXTENSION_NS)) {
+  if (
+    [EXTENSION_NS, "javascript", "typescript"].some((s) =>
+      event.affectsConfiguration(s)
+    )
+  ) {
     extensionContext.client?.sendNotification(
       "workspace/didChangeConfiguration",
       // We actually set this to empty because the language server will
@@ -85,47 +31,43 @@ function handleConfigurationChange(event: vscode.ConfigurationChangeEvent) {
       // information on the event not being reliable.
       { settings: null },
     );
-    extensionContext.workspaceSettings = getWorkspaceSettings();
-    for (
-      const [key, { scope }] of Object.entries(
-        extensionContext.documentSettings,
-      )
-    ) {
-      extensionContext.documentSettings[key] = {
-        scope,
-        settings: configToResourceSettings(
-          vscode.workspace.getConfiguration(EXTENSION_NS, scope),
-        ),
-      };
-    }
+    extensionContext.maxTsServerMemory =
+      vscode.workspace.getConfiguration(EXTENSION_NS).get(
+        "maxTsServerMemory",
+      ) ?? null;
+    refreshEnableSettings(extensionContext);
     extensionContext.tsApi.refresh();
     extensionContext.statusBar.refresh(extensionContext);
 
-    // restart when "deno.path" changes
-    if (event.affectsConfiguration("deno.path")) {
-      vscode.commands.executeCommand("deno.restart");
+    // restart when certain config changes
+    if (
+      event.affectsConfiguration("deno.enable") ||
+      event.affectsConfiguration("deno.disablePaths") ||
+      event.affectsConfiguration("deno.enablePaths") ||
+      event.affectsConfiguration("deno.env") ||
+      event.affectsConfiguration("deno.envFile") ||
+      event.affectsConfiguration("deno.future") ||
+      event.affectsConfiguration("deno.internalInspect") ||
+      event.affectsConfiguration("deno.logFile") ||
+      event.affectsConfiguration("deno.path") ||
+      event.affectsConfiguration("deno.maxTsServerMemory")
+    ) {
+      vscode.commands.executeCommand("deno.client.restart");
     }
   }
 }
 
-function handleDocumentOpen(...documents: vscode.TextDocument[]) {
-  let didChange = false;
-  for (const doc of documents) {
-    if (!LANGUAGES.includes(doc.languageId)) {
-      continue;
-    }
-    const { languageId, uri } = doc;
-    extensionContext.documentSettings[path.normalize(doc.uri.fsPath)] = {
-      scope: { languageId, uri },
-      settings: configToResourceSettings(
-        vscode.workspace.getConfiguration(EXTENSION_NS, { languageId, uri }),
-      ),
-    };
-    didChange = true;
-  }
-  if (didChange) {
-    extensionContext.tsApi.refresh();
-  }
+function handleChangeWorkspaceFolders() {
+  refreshEnableSettings(extensionContext);
+  extensionContext.tsApi.refresh();
+}
+
+export function log(...msgs: unknown[]) {
+  extensionContext.outputChannel.appendLine(
+    msgs.map((m) =>
+      typeof m === "string" ? m : util.inspect(m, { depth: Infinity })
+    ).join(" "),
+  );
 }
 
 const extensionContext = {} as DenoExtensionContext;
@@ -135,31 +77,114 @@ const extensionContext = {} as DenoExtensionContext;
 export async function activate(
   context: vscode.ExtensionContext,
 ): Promise<void> {
+  extensionContext.outputChannel = extensionContext.outputChannel ??
+    vscode.window.createOutputChannel(LANGUAGE_CLIENT_NAME);
+  const p2cMap = new Map<string, string>();
   extensionContext.clientOptions = {
     documentSelector: [
       { scheme: "file", language: "javascript" },
       { scheme: "file", language: "javascriptreact" },
       { scheme: "file", language: "typescript" },
       { scheme: "file", language: "typescriptreact" },
+      { scheme: "file", language: "json" },
+      { scheme: "file", language: "jsonc" },
+      { scheme: "file", language: "markdown" },
+      { scheme: "file", language: "html" },
+      { scheme: "file", language: "css" },
+      { scheme: "file", language: "scss" },
+      { scheme: "file", language: "sass" },
+      { scheme: "file", language: "less" },
+      { scheme: "file", language: "yaml" },
+      { scheme: "file", language: "sql" },
+      { scheme: "file", language: "svelte" },
+      { scheme: "file", language: "vue" },
+      { scheme: "file", language: "astro" },
+      { scheme: "file", language: "vento" },
+      { scheme: "file", language: "nunjucks" },
+      { scheme: "untitled", language: "javascript" },
+      { scheme: "untitled", language: "javascriptreact" },
+      { scheme: "untitled", language: "typescript" },
+      { scheme: "untitled", language: "typescriptreact" },
+      { scheme: "untitled", language: "json" },
+      { scheme: "untitled", language: "jsonc" },
+      { scheme: "untitled", language: "markdown" },
+      { scheme: "untitled", language: "html" },
+      { scheme: "untitled", language: "css" },
+      { scheme: "untitled", language: "scss" },
+      { scheme: "untitled", language: "sass" },
+      { scheme: "untitled", language: "less" },
+      { scheme: "untitled", language: "yaml" },
+      { scheme: "untitled", language: "sql" },
+      { scheme: "untitled", language: "svelte" },
+      { scheme: "untitled", language: "vue" },
+      { scheme: "untitled", language: "astro" },
+      { scheme: "untitled", language: "vento" },
+      { scheme: "untitled", language: "nunjucks" },
       { scheme: "deno", language: "javascript" },
       { scheme: "deno", language: "javascriptreact" },
       { scheme: "deno", language: "typescript" },
       { scheme: "deno", language: "typescriptreact" },
-      { scheme: "file", language: "json" },
-      { scheme: "file", language: "jsonc" },
-      { scheme: "file", language: "markdown" },
+      { scheme: "deno", language: "json" },
+      { scheme: "deno", language: "jsonc" },
+      { scheme: "deno", language: "markdown" },
+      { scheme: "deno", language: "html" },
+      { scheme: "deno", language: "css" },
+      { scheme: "deno", language: "scss" },
+      { scheme: "deno", language: "sass" },
+      { scheme: "deno", language: "less" },
+      { scheme: "deno", language: "yaml" },
+      { scheme: "deno", language: "sql" },
+      { scheme: "deno", language: "svelte" },
+      { scheme: "deno", language: "vue" },
+      { scheme: "deno", language: "astro" },
+      { scheme: "deno", language: "vento" },
+      { scheme: "deno", language: "nunjucks" },
+      { notebook: "*", language: "javascript" },
+      { notebook: "*", language: "javascriptreact" },
+      { notebook: "*", language: "typescript" },
+      { notebook: "*", language: "typescriptreact" },
     ],
+    uriConverters: {
+      code2Protocol: (uri) => {
+        if (uri.scheme == "vscode-notebook-cell") {
+          const string = uri.with({
+            scheme: "deno-notebook-cell",
+          }).toString();
+          p2cMap.set(string, uri.toString());
+          return string;
+        }
+        return uri.toString();
+      },
+      protocol2Code: (s) => {
+        const maybeMapped = p2cMap.get(s);
+        if (maybeMapped) {
+          return vscode.Uri.parse(maybeMapped);
+        }
+        return vscode.Uri.parse(s);
+      },
+    },
     diagnosticCollectionName: "deno",
-    initializationOptions: getWorkspaceSettings(),
+    initializationOptions: () => {
+      const denoConfiguration = vscode.workspace.getConfiguration().get(
+        EXTENSION_NS,
+      ) as Record<string, unknown>;
+      commands.transformDenoConfiguration(extensionContext, denoConfiguration);
+      return {
+        ...denoConfiguration,
+        javascript: vscode.workspace.getConfiguration().get("javascript"),
+        typescript: vscode.workspace.getConfiguration().get("typescript"),
+        enableBuiltinCommands: true,
+      } as object;
+    },
+    markdown: {
+      isTrusted: true,
+    },
   };
 
-  // When a document opens, the language server will query the client to
-  // determine the specific configuration of a resource, we need to ensure the
-  // the builtin TypeScript language service has the same "view" of the world,
-  // so when Deno is enabled, we need to disable the built in language service,
-  // but this is determined on a file by file basis.
-  vscode.workspace.onDidOpenTextDocument(
-    handleDocumentOpen,
+  // When a workspace folder is opened, the updates or changes to the workspace
+  // folders need to be sent to the TypeScript language service plugin
+  vscode.workspace.onDidChangeWorkspaceFolders(
+    handleChangeWorkspaceFolders,
     extensionContext,
     context.subscriptions,
   );
@@ -186,36 +211,62 @@ export async function activate(
   context.subscriptions.push(
     vscode.debug.registerDebugConfigurationProvider(
       "deno",
-      new DenoDebugConfigurationProvider(getWorkspaceSettings),
+      new DenoDebugConfigurationProvider(extensionContext),
     ),
   );
 
   // Activate the task provider.
-  context.subscriptions.push(activateTaskProvider());
+  context.subscriptions.push(activateTaskProvider(extensionContext));
 
-  // Register any commands.
-  const registerCommand = createRegisterCommand(context);
-  registerCommand("cache", commands.cache);
-  registerCommand("initializeWorkspace", commands.initializeWorkspace);
-  registerCommand("restart", commands.startLanguageServer);
-  registerCommand("reloadImportRegistries", commands.reloadImportRegistries);
-  registerCommand("showReferences", commands.showReferences);
-  registerCommand("status", commands.status);
-  registerCommand("test", commands.test);
-  registerCommand("welcome", commands.welcome);
+  extensionContext.maxTsServerMemory =
+    vscode.workspace.getConfiguration(EXTENSION_NS).get("maxTsServerMemory") ??
+      null;
+  refreshEnableSettings(extensionContext);
 
-  extensionContext.tsApi = getTsApi(() => ({
-    documents: extensionContext.documentSettings,
-    workspace: extensionContext.workspaceSettings,
+  extensionContext.tsApi = getTsApi(() => {
+    return {
+      enableSettingsUnscoped: extensionContext.enableSettingsUnscoped,
+      enableSettingsByFolder: extensionContext.enableSettingsByFolder,
+      scopesWithDenoJson: Array.from(extensionContext.scopesWithDenoJson ?? []),
+    };
+  });
+
+  extensionContext.tasksSidebar = registerSidebar(
+    extensionContext,
+    context.subscriptions,
+  )!;
+  context.subscriptions.push(vscode.workspace.onDidChangeConfiguration((e) => {
+    if (e.affectsConfiguration("deno.defaultTaskCommand")) {
+      extensionContext.tasksSidebar.refresh();
+    }
   }));
 
-  extensionContext.documentSettings = {};
-  extensionContext.workspaceSettings = getWorkspaceSettings();
-
-  // when we activate, it might have been because a document was opened that
-  // activated us, which we need to grab the config for and send it over to the
-  // plugin
-  handleDocumentOpen(...vscode.workspace.textDocuments);
+  const registerCommand = createRegisterCommand(context);
+  registerCommand("deno.client.showReferences", commands.showReferences);
+  // TODO(nayeemrmn): LSP versions <= 1.40.2 use this alias. Remove it
+  // eventually.
+  registerCommand("deno.showReferences", commands.showReferences);
+  registerCommand("deno.client.test", commands.test);
+  // TODO(nayeemrmn): LSP versions <= 1.40.2 use this alias. Remove it
+  // eventually.
+  registerCommand("deno.test", commands.test);
+  registerCommand(
+    "deno.client.cacheActiveDocument",
+    commands.cacheActiveDocument,
+  );
+  registerCommand(
+    "deno.client.clearHiddenPromptStorage",
+    commands.clearHiddenPromptStorage,
+  );
+  registerCommand("deno.client.restart", commands.startLanguageServer);
+  registerCommand("deno.client.info", commands.info);
+  registerCommand("deno.client.status", commands.status);
+  registerCommand("deno.client.welcome", commands.welcome);
+  registerCommand("deno.client.enable", commands.enable);
+  // Legacy alias for `deno.client.enable`.
+  registerCommand("deno.client.initializeWorkspace", commands.enable);
+  registerCommand("deno.client.disable", commands.disable);
+  registerCommand("deno.client.statusBarClicked", commands.statusBarClicked);
 
   await commands.startLanguageServer(context, extensionContext)();
 }
@@ -227,6 +278,10 @@ export function deactivate(): Thenable<void> | undefined {
 
   const client = extensionContext.client;
   extensionContext.client = undefined;
+  for (const disposable of extensionContext.clientSubscriptions ?? []) {
+    disposable.dispose();
+  }
+  extensionContext.clientSubscriptions = undefined;
   extensionContext.statusBar.refresh(extensionContext);
   vscode.commands.executeCommand("setContext", ENABLEMENT_FLAG, false);
   return client.stop();
@@ -244,10 +299,9 @@ function createRegisterCommand(
       extensionContext: DenoExtensionContext,
     ) => commands.Callback,
   ): void {
-    const fullName = `${EXTENSION_NS}.${name}`;
     const command = factory(context, extensionContext);
     context.subscriptions.push(
-      vscode.commands.registerCommand(fullName, command),
+      vscode.commands.registerCommand(name, command),
     );
   };
 }
